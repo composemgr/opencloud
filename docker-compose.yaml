@@ -1,0 +1,157 @@
+# nginx proxy address - http://172.17.0.1:63080
+
+name: opencloud
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  opencloud:
+    image: opencloudeu/opencloud-rolling:latest
+    container_name: opencloud-app
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    user: "${SERVICE_USER:-1000}:${SERVICE_GROUP:-1000}"
+    entrypoint:
+      - /bin/sh
+    command: ["-c", "opencloud init || true; opencloud server"]
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: opencloud-app
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      # OpenCloud core
+      OC_URL: https://${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+      OC_LOG_LEVEL: info
+      OC_LOG_COLOR: "false"
+      OC_LOG_PRETTY: "false"
+      OC_INSECURE: "false"
+      OC_DEFAULT_LANGUAGE: en
+      # Proxy - no TLS between reverse proxy and OpenCloud
+      PROXY_TLS: "false"
+      PROXY_HTTP_ADDR: "0.0.0.0:9200"
+      PROXY_ENABLE_BASIC_AUTH: "false"
+      PROXY_CSP_CONFIG_FILE_LOCATION: /etc/opencloud/csp.yaml
+      # IDM
+      IDM_CREATE_DEMO_USERS: "false"
+      IDM_ADMIN_PASSWORD: "${APP_ADMIN_PASS:-admin}"
+      # SMTP notifications
+      NOTIFICATIONS_SMTP_HOST: "${EMAIL_SERVER_HOST:-}"
+      NOTIFICATIONS_SMTP_PORT: "${EMAIL_SERVER_PORT:-}"
+      NOTIFICATIONS_SMTP_SENDER: "${EMAIL_SERVER_MAIL_FROM:-OpenCloud <notifications@${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}>}"
+      NOTIFICATIONS_SMTP_USERNAME: "${EMAIL_SERVER_LOGIN_NAME:-}"
+      NOTIFICATIONS_SMTP_PASSWORD: "${EMAIL_SERVER_LOGIN_PASS:-}"
+      NOTIFICATIONS_SMTP_INSECURE: "false"
+      NOTIFICATIONS_SMTP_AUTHENTICATION: ""
+      NOTIFICATIONS_SMTP_ENCRYPTION: "none"
+      # Frontend
+      FRONTEND_ARCHIVER_MAX_SIZE: "10000000000"
+      FRONTEND_CHECK_FOR_UPDATES: "true"
+      FRONTEND_APP_HANDLER_SECURE_VIEW_APP_ADDR: eu.opencloud.api.collaboration
+      # Password policy
+      OC_PASSWORD_POLICY_BANNED_PASSWORDS_LIST: banned-password-list.txt
+      OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD: "true"
+      OC_SHARING_PUBLIC_WRITEABLE_SHARE_MUST_HAVE_PASSWORD: "false"
+      OC_PASSWORD_POLICY_DISABLED: "false"
+      OC_PASSWORD_POLICY_MIN_CHARACTERS: "8"
+      OC_PASSWORD_POLICY_MIN_LOWERCASE_CHARACTERS: "1"
+      OC_PASSWORD_POLICY_MIN_UPPERCASE_CHARACTERS: "1"
+      OC_PASSWORD_POLICY_MIN_DIGITS: "1"
+      OC_PASSWORD_POLICY_MIN_SPECIAL_CHARACTERS: "1"
+      # Collabora integration
+      COLLABORA_DOMAIN: collabora.${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+      NATS_NATS_HOST: 0.0.0.0
+      GATEWAY_GRPC_ADDR: 0.0.0.0:9142
+      GRAPH_AVAILABLE_ROLES: "b1e2218d-eef8-4d4c-b82d-0f1a1b48f3b5,a8d5fe5e-96e3-418d-825b-534dbdf22b99,fb6c3e19-e378-47e5-b277-9732f9de6e21,58c63c02-1d89-4572-916a-870abc5a1b7d,2d00ce52-1fc2-4dbc-8b95-a73b73395f5a,1c996275-f1c9-4e71-abdf-a42f6495e960,312c0871-5ef7-4b3a-85b6-0e4074c64049,aa97fe03-7980-45ac-9e50-b325749fd7e6"
+    ports:
+      - '172.17.0.1:62000:9200'
+    volumes:
+      - './rootfs/config/opencloud/csp.yaml:/etc/opencloud/csp.yaml'
+      - './rootfs/config/opencloud/banned-password-list.txt:/etc/opencloud/banned-password-list.txt'
+      - './rootfs/config/opencloud:/etc/opencloud'
+      - './rootfs/data/opencloud:/var/lib/opencloud'
+      - './rootfs/config/opencloud/apps:/var/lib/opencloud/web/assets/apps'
+    networks:
+      - opencloud
+
+  collaboration:
+    image: opencloudeu/opencloud-rolling:latest
+    container_name: opencloud-collaboration
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    user: "${SERVICE_USER:-1000}:${SERVICE_GROUP:-1000}"
+    depends_on:
+      opencloud:
+        condition: service_started
+      collabora:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+    command: ["-c", "opencloud collaboration server"]
+    environment:
+      TZ: ${TZ:-America/New_York}
+      COLLABORATION_GRPC_ADDR: 0.0.0.0:9301
+      COLLABORATION_HTTP_ADDR: 0.0.0.0:9300
+      MICRO_REGISTRY: "nats-js-kv"
+      MICRO_REGISTRY_ADDRESS: "opencloud:9233"
+      COLLABORATION_WOPI_SRC: https://wopiserver.${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+      COLLABORATION_APP_NAME: "CollaboraOnline"
+      COLLABORATION_APP_PRODUCT: "Collabora"
+      COLLABORATION_APP_ADDR: https://collabora.${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+      COLLABORATION_APP_ICON: https://collabora.${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}/favicon.ico
+      COLLABORATION_APP_INSECURE: "true"
+      COLLABORATION_CS3API_DATAGATEWAY_INSECURE: "true"
+      COLLABORATION_LOG_LEVEL: info
+      OC_URL: https://${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+    ports:
+      - '172.17.0.1:62001:9300'
+    volumes:
+      - './rootfs/config/opencloud:/etc/opencloud'
+    networks:
+      - opencloud
+
+  collabora:
+    image: collabora/code:25.04.7.1.1
+    container_name: opencloud-collabora
+    restart: always
+    pull_policy: always
+    logging: *default-logging
+    entrypoint: ['/bin/bash', '-c']
+    command: ['coolconfig generate-proof-key && /start-collabora-online.sh']
+    environment:
+      TZ: ${TZ:-America/New_York}
+      aliasgroup1: https://wopiserver.${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+      DONT_GEN_SSL_CERT: "YES"
+      extra_params: |
+        --o:ssl.enable=false \
+        --o:ssl.ssl_verification=false \
+        --o:ssl.termination=true \
+        --o:welcome.enable=false \
+        --o:net.frame_ancestors=${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}} \
+        --o:net.lok_allow.host[14]=${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}} \
+        --o:home_mode.enable=false
+      username: ${APP_ADMIN_USER:-admin}
+      password: ${APP_ADMIN_PASS:-admin}
+    cap_add:
+      - MKNOD
+    ports:
+      - '172.17.0.1:62002:9980'
+    volumes:
+      - '/usr/share/fonts/truetype:/usr/share/fonts/truetype/more:ro'
+      - '/usr/share/fonts/truetype:/opt/cool/systemplate/usr/share/fonts/truetype/more:ro'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9980/hosting/discovery"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - opencloud
+
+networks:
+  opencloud:
+    name: opencloud
+    external: false
