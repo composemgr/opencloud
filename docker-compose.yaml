@@ -69,11 +69,11 @@ services:
     ports:
       - '172.17.0.1:62000:9200'
     volumes:
-      - './rootfs/config/opencloud/csp.yaml:/etc/opencloud/csp.yaml'
-      - './rootfs/config/opencloud/banned-password-list.txt:/etc/opencloud/banned-password-list.txt'
-      - './rootfs/config/opencloud:/etc/opencloud'
-      - './rootfs/data/opencloud:/var/lib/opencloud'
-      - './rootfs/config/opencloud/apps:/var/lib/opencloud/web/assets/apps'
+      - './volumes/config/opencloud/csp.yaml:/etc/opencloud/csp.yaml'
+      - './volumes/config/opencloud/banned-password-list.txt:/etc/opencloud/banned-password-list.txt'
+      - './volumes/config/opencloud:/etc/opencloud'
+      - './volumes/data/opencloud:/var/lib/opencloud'
+      - './volumes/config/opencloud/apps:/var/lib/opencloud/web/assets/apps'
     networks:
       - opencloud
 
@@ -110,7 +110,7 @@ services:
     ports:
       - '172.17.0.1:62001:9300'
     volumes:
-      - './rootfs/config/opencloud:/etc/opencloud'
+      - './volumes/config/opencloud:/etc/opencloud'
     networks:
       - opencloud
 
