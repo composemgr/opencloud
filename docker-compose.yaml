@@ -1,4 +1,4 @@
-# nginx proxy address - http://172.17.0.1:63080
+# nginx proxy address - http://172.17.0.1:62000
 
 name: opencloud
 x-logging: &default-logging
@@ -76,6 +76,24 @@ services:
       - './volumes/config/opencloud/apps:/var/lib/opencloud/web/assets/apps'
     networks:
       - opencloud
+      - proxy
+      - cloudflare
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://opencloud-app:9200'
+      - 'cloudflare.hostname=opencloud.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.opencloud-app.entrypoints=http'
+      - 'traefik.http.routers.opencloud-app-secure.tls=true'
+      - 'traefik.http.routers.opencloud-app.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.opencloud-app-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.opencloud-app.middlewares=opencloud-app-https-redirect'
+      - 'traefik.http.routers.opencloud-app-secure.entrypoints=https'
+      - 'traefik.http.routers.opencloud-app-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.opencloud-app-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.opencloud-app-secure.service=opencloud-app'
+      - 'traefik.http.services.opencloud-app.loadbalancer.server.port=9200'
 
   collaboration:
     image: opencloudeu/opencloud-rolling:latest
@@ -107,12 +125,32 @@ services:
       COLLABORATION_CS3API_DATAGATEWAY_INSECURE: "true"
       COLLABORATION_LOG_LEVEL: info
       OC_URL: https://${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}
+      CONTAINER_NAME: opencloud-collaboration
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
     ports:
       - '172.17.0.1:62001:9300'
     volumes:
       - './volumes/config/opencloud:/etc/opencloud'
     networks:
       - opencloud
+      - proxy
+      - cloudflare
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://opencloud-collaboration:9300'
+      - 'cloudflare.hostname=opencloud.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.opencloud-collaboration.entrypoints=http'
+      - 'traefik.http.routers.opencloud-collaboration-secure.tls=true'
+      - 'traefik.http.routers.opencloud-collaboration.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.opencloud-collaboration-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.opencloud-collaboration.middlewares=opencloud-collaboration-https-redirect'
+      - 'traefik.http.routers.opencloud-collaboration-secure.entrypoints=https'
+      - 'traefik.http.routers.opencloud-collaboration-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.opencloud-collaboration-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.opencloud-collaboration-secure.service=opencloud-collaboration'
+      - 'traefik.http.services.opencloud-collaboration.loadbalancer.server.port=9300'
 
   collabora:
     image: collabora/code:25.04.7.1.1
@@ -136,6 +174,8 @@ services:
         --o:home_mode.enable=false
       username: ${APP_ADMIN_USER:-admin}
       password: ${APP_ADMIN_PASS:-changeme_admin_password}
+      CONTAINER_NAME: opencloud-collabora
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
     cap_add:
       - MKNOD
     ports:
@@ -150,8 +190,30 @@ services:
       retries: 5
     networks:
       - opencloud
+      - proxy
+      - cloudflare
+    labels:
+      - 'traefik.enable=true'
+      - 'cloudflare.enable=true'
+      - 'traefik.docker.network=proxy'
+      - 'cloudflare.service=http://opencloud-collabora:9980'
+      - 'cloudflare.hostname=opencloud.${CLOUDFLARE_ZONE_NAME:-}'
+      - 'traefik.http.routers.opencloud-collabora.entrypoints=http'
+      - 'traefik.http.routers.opencloud-collabora-secure.tls=true'
+      - 'traefik.http.routers.opencloud-collabora.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.middlewares.opencloud-collabora-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.opencloud-collabora.middlewares=opencloud-collabora-https-redirect'
+      - 'traefik.http.routers.opencloud-collabora-secure.entrypoints=https'
+      - 'traefik.http.routers.opencloud-collabora-secure.rule=Host($(${BASE_HOST_NAME:-$HOSTNAME}))'
+      - 'traefik.http.routers.opencloud-collabora-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.opencloud-collabora-secure.service=opencloud-collabora'
+      - 'traefik.http.services.opencloud-collabora.loadbalancer.server.port=9980'
 
 networks:
   opencloud:
     name: opencloud
     external: false
+  proxy:
+    external: true
+  cloudflare:
+    external: true
