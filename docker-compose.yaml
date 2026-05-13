@@ -37,11 +37,11 @@ services:
       PROXY_CSP_CONFIG_FILE_LOCATION: /etc/opencloud/csp.yaml
       # IDM
       IDM_CREATE_DEMO_USERS: "false"
-      IDM_ADMIN_PASSWORD: "${APP_ADMIN_PASS:-admin}"
+      IDM_ADMIN_PASSWORD: "${APP_ADMIN_PASS:-changeme_admin_password}"
       # SMTP notifications
-      NOTIFICATIONS_SMTP_HOST: "${EMAIL_SERVER_HOST:-}"
-      NOTIFICATIONS_SMTP_PORT: "${EMAIL_SERVER_PORT:-}"
-      NOTIFICATIONS_SMTP_SENDER: "${EMAIL_SERVER_MAIL_FROM:-OpenCloud <notifications@${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}}>}"
+      NOTIFICATIONS_SMTP_HOST: "${EMAIL_SERVER_HOST:-172.17.0.1}"
+      NOTIFICATIONS_SMTP_PORT: "${EMAIL_SERVER_PORT:-587}"
+      NOTIFICATIONS_SMTP_SENDER: "${EMAIL_SERVER_MAIL_FROM:-notifications@example.com}"
       NOTIFICATIONS_SMTP_USERNAME: "${EMAIL_SERVER_LOGIN_NAME:-}"
       NOTIFICATIONS_SMTP_PASSWORD: "${EMAIL_SERVER_LOGIN_PASS:-}"
       NOTIFICATIONS_SMTP_INSECURE: "false"
@@ -135,7 +135,7 @@ services:
         --o:net.lok_allow.host[14]=${BASE_DOMAIN_NAME:-${BASE_HOST_NAME:-$HOSTNAME}} \
         --o:home_mode.enable=false
       username: ${APP_ADMIN_USER:-admin}
-      password: ${APP_ADMIN_PASS:-admin}
+      password: ${APP_ADMIN_PASS:-changeme_admin_password}
     cap_add:
       - MKNOD
     ports:
