@@ -1,0 +1,160 @@
+name: opencloud
+x-logging: &default-logging
+  options:
+    max-size: '5m'
+    max-file: '1'
+  driver: json-file
+
+services:
+  server:
+    image: opencloudeu/opencloud-rolling:latest
+    container_name: opencloud-server
+    domainname: ${BASE_DOMAIN_NAME:-example.com}
+    hostname: ${BASE_HOST_NAME:-$HOSTNAME}
+    restart: always
+    pull_policy: always
+    user: "${SERVICE_USER:-1000}:${SERVICE_GROUP:-1000}"
+    command: ["-c", "opencloud init || true; opencloud server"]
+    entrypoint: ['/bin/sh']
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: opencloud-server
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      # Core server
+      OC_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
+      OC_LOG_LEVEL: ${OC_LOG_LEVEL:-info}
+      OC_LOG_COLOR: "false"
+      OC_LOG_PRETTY: "false"
+      OC_INSECURE: "false"
+      OC_DEFAULT_LANGUAGE: en
+      # Reverse proxy in front of OpenCloud
+      PROXY_TLS: "false"
+      PROXY_HTTP_ADDR: 0.0.0.0:9200
+      PROXY_ENABLE_BASIC_AUTH: "false"
+      PROXY_CSP_CONFIG_FILE_LOCATION: /etc/opencloud/csp.yaml
+      # Identity management
+      IDM_CREATE_DEMO_USERS: "false"
+      IDM_ADMIN_PASSWORD: ${APP_ADMIN_PASS:-changeme_admin_password}
+      # SMTP notifications
+      NOTIFICATIONS_SMTP_HOST: ${EMAIL_SERVER_HOST:-172.17.0.1}
+      NOTIFICATIONS_SMTP_PORT: ${EMAIL_SERVER_PORT:-587}
+      NOTIFICATIONS_SMTP_SENDER: ${EMAIL_SERVER_MAIL_FROM:-no-reply@example.com}
+      NOTIFICATIONS_SMTP_USERNAME: ${EMAIL_SERVER_LOGIN_NAME:-}
+      NOTIFICATIONS_SMTP_PASSWORD: ${EMAIL_SERVER_LOGIN_PASS:-}
+      NOTIFICATIONS_SMTP_INSECURE: "false"
+      NOTIFICATIONS_SMTP_ENCRYPTION: none
+      # Frontend
+      FRONTEND_ARCHIVER_MAX_SIZE: "10000000000"
+      FRONTEND_CHECK_FOR_UPDATES: "true"
+      # Password policy
+      OC_PASSWORD_POLICY_DISABLED: "false"
+      OC_PASSWORD_POLICY_MIN_CHARACTERS: "8"
+      OC_PASSWORD_POLICY_MIN_LOWERCASE_CHARACTERS: "1"
+      OC_PASSWORD_POLICY_MIN_UPPERCASE_CHARACTERS: "1"
+      OC_PASSWORD_POLICY_MIN_DIGITS: "1"
+      OC_PASSWORD_POLICY_MIN_SPECIAL_CHARACTERS: "1"
+      OC_SHARING_PUBLIC_SHARE_MUST_HAVE_PASSWORD: "true"
+      # Collabora integration - reached over the project network
+      COLLABORA_DOMAIN: ${BASE_HOST_NAME:-$HOSTNAME}
+      COLLABORATION_APP_ADDR: https://${BASE_HOST_NAME:-$HOSTNAME}
+      COLLABORATION_WOPI_SRC: https://${BASE_HOST_NAME:-$HOSTNAME}
+      NATS_NATS_HOST: 0.0.0.0
+      GATEWAY_GRPC_ADDR: 0.0.0.0:9142
+    volumes:
+      - './volumes/config/opencloud:/etc/opencloud'
+      - './volumes/config/opencloud/apps:/var/lib/opencloud/web/assets/apps'
+      - './volumes/data/opencloud:/var/lib/opencloud'
+    depends_on:
+      collaboration:
+        condition: service_started
+      collabora:
+        condition: service_healthy
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.docker.network=traefik'
+      - 'traefik.http.routers.opencloud-server.entrypoints=http'
+      - 'traefik.http.routers.opencloud-server.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.opencloud-server.middlewares=opencloud-server-https-redirect'
+      - 'traefik.http.middlewares.opencloud-server-https-redirect.redirectscheme.scheme=https'
+      - 'traefik.http.routers.opencloud-server-secure.entrypoints=https'
+      - 'traefik.http.routers.opencloud-server-secure.rule=Host(`${BASE_HOST_NAME:-$HOSTNAME}`)'
+      - 'traefik.http.routers.opencloud-server-secure.tls.certresolver=cloudflare'
+      - 'traefik.http.routers.opencloud-server-secure.service=opencloud-server'
+      - 'traefik.http.services.opencloud-server.loadbalancer.server.port=9200'
+    networks:
+      - opencloud
+      - traefik
+
+  collaboration:
+    image: opencloudeu/opencloud-rolling:latest
+    container_name: opencloud-collaboration
+    hostname: opencloud-collaboration
+    restart: always
+    pull_policy: always
+    user: "${SERVICE_USER:-1000}:${SERVICE_GROUP:-1000}"
+    command: ["-c", "opencloud collaboration server"]
+    entrypoint: ['/bin/sh']
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: opencloud-collaboration
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      OC_URL: https://${BASE_HOST_NAME:-$HOSTNAME}
+      COLLABORATION_GRPC_ADDR: 0.0.0.0:9301
+      COLLABORATION_HTTP_ADDR: 0.0.0.0:9300
+      MICRO_REGISTRY: nats-js-kv
+      MICRO_REGISTRY_ADDRESS: opencloud-server:9233
+      COLLABORATION_WOPI_SRC: https://${BASE_HOST_NAME:-$HOSTNAME}
+      COLLABORATION_APP_NAME: CollaboraOnline
+      COLLABORATION_APP_PRODUCT: Collabora
+      COLLABORATION_APP_ADDR: https://${BASE_HOST_NAME:-$HOSTNAME}
+      COLLABORATION_APP_INSECURE: "true"
+      COLLABORATION_CS3API_DATAGATEWAY_INSECURE: "true"
+      COLLABORATION_LOG_LEVEL: ${COLLABORATION_LOG_LEVEL:-info}
+    volumes:
+      - './volumes/config/opencloud:/etc/opencloud'
+    networks:
+      - opencloud
+
+  collabora:
+    image: collabora/code:25.04.7.1.1
+    container_name: opencloud-collabora
+    hostname: opencloud-collabora
+    restart: always
+    pull_policy: always
+    command: ['coolconfig generate-proof-key && /start-collabora-online.sh']
+    entrypoint: ['/bin/bash', '-c']
+    cap_add: ['MKNOD']
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-America/New_York}
+      CONTAINER_NAME: opencloud-collabora
+      HOSTNAME: ${BASE_HOST_NAME:-$HOSTNAME}
+      aliasgroup1: https://${BASE_HOST_NAME:-$HOSTNAME}
+      DONT_GEN_SSL_CERT: "YES"
+      extra_params: |
+        --o:ssl.enable=false \
+        --o:ssl.ssl_verification=false \
+        --o:ssl.termination=true \
+        --o:welcome.enable=false \
+        --o:home_mode.enable=false
+      username: ${COLLABORA_ADMIN_USER:-admin}
+      password: ${COLLABORA_ADMIN_PASS:-changeme_collabora_password}
+    volumes:
+      - '/usr/share/fonts/truetype:/usr/share/fonts/truetype/more:ro'
+      - '/usr/share/fonts/truetype:/opt/cool/systemplate/usr/share/fonts/truetype/more:ro'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9980/hosting/discovery']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - opencloud
+
+networks:
+  opencloud:
+    name: opencloud
+    external: false
+  traefik:
+    external: true

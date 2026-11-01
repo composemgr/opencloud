@@ -1,78 +1,145 @@
-## OpenCloud - Self-hosted Cloud Storage
+## 👋 Welcome to opencloud 🚀
 
-OpenCloud with Collabora Online office integration, configured for use behind an external reverse proxy.
+Self-hosted cloud storage with Collabora Online office integration
 
-### Services
+## 📋 Description
 
-| Service       | Container Name          | Port  | Description                    |
-| ------------- | ----------------------- | ----- | ------------------------------ |
-| opencloud     | opencloud-app           | 62000 | OpenCloud server (proxy: 9200) |
-| collaboration | opencloud-collaboration | 62001 | WOPI server (collaboration)    |
-| collabora     | opencloud-collabora     | 62002 | Collabora Online (office)      |
+Self-hosted cloud storage with Collabora Online office integration
 
-All ports bind to `172.17.0.1` for access via the nginx proxy.
+## 🚀 Services
 
-### Requires composemgr to be installed
+- **server**: opencloudeu/opencloud-rolling:latest
+- **collaboration**: opencloudeu/opencloud-rolling:latest
+- **collabora**: collabora/code:25.04.7.1.1
 
-```shell
-sudo bash -c "$(curl -q -LSsf "https://github.com/composemgr/installer/raw/main/install.sh")" && sudo composemgr install installer
+## 📦 Installation
+
+### Option 1: Quick Install
+```bash
+curl -q -LSsf "https://raw.githubusercontent.com/composemgr/opencloud/main/docker-compose.yaml" -o compose.yml
 ```
 
-### Install docker compose files
+### Option 2: Git Clone
+```bash
+git clone "https://github.com/composemgr/opencloud" ~/.local/srv/docker/opencloud
+cd ~/.local/srv/docker/opencloud
+cp default.env .env
+docker compose --env-file .env up -d
+```
 
-```shell
+### Option 3: Using composemgr
+```bash
 composemgr install opencloud
 ```
 
-### Edit .env
+## 🔧 Configuration
+
+### Environment Variables
 
 ```shell
-$EDITOR "$HOME/.config/myscripts/composemgr/docker/opencloud/.env"
+TZ=America/New_York
+BASE_DOMAIN_NAME=example.com
+BASE_HOST_NAME=opencloud.example.com
+SERVICE_USER=1000
+SERVICE_GROUP=1000
+APP_ADMIN_PASS=replace-with-a-random-password
+COLLABORA_ADMIN_USER=admin
+COLLABORA_ADMIN_PASS=replace-with-a-random-password
+OC_LOG_LEVEL=info
+COLLABORATION_LOG_LEVEL=info
+EMAIL_SERVER_PORT=587
+EMAIL_SERVER_HOST=172.17.0.1
+EMAIL_SERVER_MAIL_FROM=no-reply@example.com
+EMAIL_SERVER_LOGIN_NAME=replace-with-your-smtp-username
+EMAIL_SERVER_LOGIN_PASS=replace-with-your-smtp-password
+CLOUDFLARE_ZONE_NAME=example.com
+CLOUDFLARE_TUNNEL_ID=replace-with-your-tunnel-id
 ```
 
-At minimum, set these variables:
+See `docker-compose.yaml` for complete list of configurable options.
 
-- `OC_DOMAIN` - your OpenCloud domain (e.g. `cloud.example.com`)
-- `COLLABORA_DOMAIN` - your Collabora domain (e.g. `collabora.example.com`)
-- `WOPISERVER_DOMAIN` - your WOPI server domain (e.g. `wopiserver.example.com`)
-- `INITIAL_ADMIN_PASSWORD` - admin password (must be set before first start)
+### Environment Files
 
-### Edit app.env - will overwrite defaults from .env
+`default.env.sample` holds the full set of variables and is copied to `.env`
+before starting the stack:
+
+```bash
+cp default.env .env
+docker compose --env-file .env up -d
+```
+
+`app.env.sample` holds the app-specific overrides and is copied to `app.env`:
+
+```bash
+cp app.env.sample app.env
+```
+
+`composemgr up` applies `app.env` and `default.env` automatically. Raw
+`docker compose` commands need `--env-file .env` to pick up the same values.
+
+### Reverse Proxy
+
+Three standalone compose files ship in this repo:
+
+| File | Use |
+|------|-----|
+| `docker-compose.yaml` | Default, published on `172.17.0.1:64282` |
+| `docker-compose.traefik.yaml` | Behind an existing external `traefik` network |
+| `docker-compose.tunnel.yaml` | Behind an existing external `cloudflare` tunnel network |
+
+```bash
+docker compose -f docker-compose.traefik.yaml --env-file .env up -d
+```
+
+## 🌐 Access
+
+- **Web Interface**: http://172.17.0.1:64282
+
+## 📂 Volumes
+
+- `./volumes/config/opencloud` - Configuration
+- `./volumes/config/opencloud/apps` - App assets
+- `./volumes/data/opencloud` - Application data
+
+## 🔐 Security
+
+- Change all default passwords before deploying to production
+- Use strong secrets for all authentication tokens
+- Configure HTTPS using a reverse proxy (nginx, traefik, caddy)
+- Regularly update Docker images for security patches
+- Backup your data regularly
+
+## 🔍 Logging
 
 ```shell
-$EDITOR "$HOME/.config/myscripts/composemgr/docker/opencloud/app.env"
+docker compose --env-file .env logs -f server
 ```
 
-### Pull the containers
+## 🛠️ Management
 
-```shell
-composemgr --dir "$HOME/.config/myscripts/composemgr/docker/opencloud" pull
+```bash
+# Start services
+docker compose --env-file .env up -d
+
+# Stop services
+docker compose --env-file .env down
+
+# Update to latest images
+docker compose --env-file .env pull && docker compose --env-file .env up -d
+
+# View logs
+docker compose --env-file .env logs -f
+
+# Restart services
+docker compose --env-file .env restart
 ```
 
-### Start the stack
+## 📋 Requirements
 
-```shell
-composemgr --dir "$HOME/.config/myscripts/composemgr/docker/opencloud" up
-```
+- Docker Engine 20.10+
+- Docker Compose V2+
 
-### Get the logs for the stack
+## 🤝 Author
 
-```shell
-composemgr --dir "$HOME/.config/myscripts/composemgr/docker/opencloud" logs
-```
-
-### Reverse Proxy Configuration
-
-Your external proxy needs to route these domains:
-
-- `OC_DOMAIN` -> `172.17.0.1:62000`
-- `WOPISERVER_DOMAIN` -> `172.17.0.1:62001`
-- `COLLABORA_DOMAIN` -> `172.17.0.1:62002`
-
-All three domains require valid TLS certificates managed by your proxy.
-
-### References
-
-- [OpenCloud Documentation](https://docs.opencloud.eu)
-- [OpenCloud Compose Repository](https://github.com/opencloud-eu/opencloud-compose)
-- [Collabora Online](https://www.collaboraonline.com)
+🤖 casjay: [Github](https://github.com/casjay) 🤖
+🦄 composemgr: [Github](https://github.com/composemgr) 🦄
