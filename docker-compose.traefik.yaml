@@ -61,6 +61,12 @@ services:
       COLLABORATION_WOPI_SRC: https://${BASE_HOST_NAME:-$HOSTNAME}
       NATS_NATS_HOST: 0.0.0.0
       GATEWAY_GRPC_ADDR: 0.0.0.0:9142
+    healthcheck:
+      test: ['CMD', 'curl', '-s', '-o', '/dev/null', '--max-time', '5', 'http://127.0.0.1:9200/']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     volumes:
       - './volumes/config/opencloud:/etc/opencloud'
       - './volumes/config/opencloud/apps:/var/lib/opencloud/web/assets/apps'
@@ -112,6 +118,12 @@ services:
       COLLABORATION_APP_INSECURE: "true"
       COLLABORATION_CS3API_DATAGATEWAY_INSECURE: "true"
       COLLABORATION_LOG_LEVEL: ${COLLABORATION_LOG_LEVEL:-info}
+    healthcheck:
+      test: ['CMD', 'curl', '-s', '-o', '/dev/null', '--max-time', '5', 'http://127.0.0.1:9200/']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     volumes:
       - './volumes/config/opencloud:/etc/opencloud'
     networks:
